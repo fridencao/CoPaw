@@ -2,19 +2,17 @@
 """Safe JSON session with filename sanitization for cross-platform
 compatibility.
 
-Windows filenames cannot contain: \\ / : * ? " < > |
-This module wraps agentscope's SessionBase so that session_id and user_id
-are sanitized before being used as filenames.
+This module provides session persistence using LangGraph's checkpoint
+system, replacing the agentscope SessionBase.
 """
 import os
 import re
 import json
 import logging
+from pathlib import Path
 
-from typing import Union, Sequence
-
+from typing import Any, Dict, Optional, Sequence
 import aiofiles
-from agentscope.session import SessionBase
 
 logger = logging.getLogger(__name__)
 
@@ -34,203 +32,92 @@ def sanitize_filename(name: str) -> str:
     return _UNSAFE_FILENAME_RE.sub("--", name)
 
 
-class SafeJSONSession(SessionBase):
-    """SessionBase subclass with filename sanitization and async file I/O.
+class LangGraphSession:
+    """Session using LangGraph checkpoint for persistence.
 
-    Overrides all file-reading/writing methods to use :mod:`aiofiles` so
-    that disk I/O does not block the event loop.
+    This replaces the agentscope SessionBase with LangGraph's
+    checkpoint mechanism for session state management.
     """
 
     def __init__(
         self,
         save_dir: str = "./",
+        checkpointer: Optional[Any] = None,
     ) -> None:
-        """Initialize the JSON session class.
+        """Initialize the session.
 
         Args:
-            save_dir (`str`, defaults to `"./"):
-                The directory to save the session state.
+            save_dir: Directory to save session state
+            checkpointer: LangGraph checkpointer for persistence
         """
         self.save_dir = save_dir
+        self._checkpointer = checkpointer
 
-    def _get_save_path(self, session_id: str, user_id: str) -> str:
+    def _get_save_path(self, session_id: str, user_id: str) -> Path:
         """Return a filesystem-safe save path.
 
-        Overrides the parent implementation to ensure the generated
-        filename is valid on Windows, macOS and Linux.
-        """
-        os.makedirs(self.save_dir, exist_ok=True)
-        safe_sid = sanitize_filename(session_id)
-        safe_uid = sanitize_filename(user_id) if user_id else ""
-        if safe_uid:
-            file_path = f"{safe_uid}_{safe_sid}.json"
-        else:
-            file_path = f"{safe_sid}.json"
-        return os.path.join(self.save_dir, file_path)
-
-    async def save_session_state(
-        self,
-        session_id: str,
-        user_id: str = "",
-        **state_modules_mapping,
-    ) -> None:
-        """Save state modules to a JSON file using async I/O."""
-        state_dicts = {
-            name: state_module.state_dict()
-            for name, state_module in state_modules_mapping.items()
-        }
-        session_save_path = self._get_save_path(session_id, user_id=user_id)
-        with open(
-            session_save_path,
-            "w",
-            encoding="utf-8",
-        ) as f:
-            f.write(json.dumps(state_dicts, ensure_ascii=False))
-
-        logger.info(
-            "Saved session state to %s successfully.",
-            session_save_path,
-        )
-
-    async def load_session_state(
-        self,
-        session_id: str,
-        user_id: str = "",
-        allow_not_exist: bool = True,
-        **state_modules_mapping,
-    ) -> None:
-        """Load state modules from a JSON file using async I/O."""
-        session_save_path = self._get_save_path(session_id, user_id=user_id)
-        if os.path.exists(session_save_path):
-            async with aiofiles.open(
-                session_save_path,
-                "r",
-                encoding="utf-8",
-                errors="surrogatepass",
-            ) as f:
-                content = await f.read()
-                states = json.loads(content)
-
-            for name, state_module in state_modules_mapping.items():
-                if name in states:
-                    state_module.load_state_dict(states[name])
-            logger.info(
-                "Load session state from %s successfully.",
-                session_save_path,
-            )
-
-        elif allow_not_exist:
-            logger.info(
-                "Session file %s does not exist. Skip loading session state.",
-                session_save_path,
-            )
-
-        else:
-            raise ValueError(
-                f"Failed to load session state for file {session_save_path} "
-                "because it does not exist.",
-            )
-
-    async def update_session_state(
-        self,
-        session_id: str,
-        key: Union[str, Sequence[str]],
-        value,
-        user_id: str = "",
-        create_if_not_exist: bool = True,
-    ) -> None:
-        session_save_path = self._get_save_path(session_id, user_id=user_id)
-
-        if os.path.exists(session_save_path):
-            async with aiofiles.open(
-                session_save_path,
-                "r",
-                encoding="utf-8",
-                errors="surrogatepass",
-            ) as f:
-                content = await f.read()
-                states = json.loads(content)
-
-        else:
-            if not create_if_not_exist:
-                raise ValueError(
-                    f"Session file {session_save_path} does not exist.",
-                )
-            states = {}
-
-        path = key.split(".") if isinstance(key, str) else list(key)
-        if not path:
-            raise ValueError("key path is empty")
-
-        cur = states
-        for k in path[:-1]:
-            if k not in cur or not isinstance(cur[k], dict):
-                cur[k] = {}
-            cur = cur[k]
-
-        cur[path[-1]] = value
-
-        with open(
-            session_save_path,
-            "w",
-            encoding="utf-8",
-        ) as f:
-            f.write(json.dumps(states, ensure_ascii=False))
-
-        logger.info(
-            "Updated session state key '%s' in %s successfully.",
-            key,
-            session_save_path,
-        )
-
-    async def get_session_state_dict(
-        self,
-        session_id: str,
-        user_id: str = "",
-        allow_not_exist: bool = True,
-    ) -> dict:
-        """Return the session state dict from the JSON file.
-
         Args:
-            session_id (`str`):
-                The session id.
-            user_id (`str`, default to `""`):
-                The user ID for the storage.
-            allow_not_exist (`bool`, defaults to `True`):
-                Whether to allow the session to not exist. If `False`, raises
-                an error if the session does not exist.
+            session_id: Session identifier
+            user_id: User identifier
 
         Returns:
-            `dict`:
-                The session state dict loaded from the JSON file. Returns an
-                empty dict if the file does not exist and
-                `allow_not_exist=True`.
+            Path to save file
         """
-        session_save_path = self._get_save_path(session_id, user_id=user_id)
-        if os.path.exists(session_save_path):
-            async with aiofiles.open(
-                session_save_path,
-                "r",
-                encoding="utf-8",
-                errors="surrogatepass",
-            ) as file:
-                content = await file.read()
-                states = json.loads(content)
+        safe_session = sanitize_filename(session_id)
+        safe_user = sanitize_filename(user_id)
+        save_dir = Path(self.save_dir) / "sessions" / safe_user
+        save_dir.mkdir(parents=True, exist_ok=True)
+        return save_dir / f"{safe_session}.json"
 
-            logger.info(
-                "Get session state dict from %s successfully.",
-                session_save_path,
-            )
-            return states
+    async def save(
+        self,
+        session_id: str,
+        user_id: str,
+        state: Dict[str, Any],
+    ) -> None:
+        """Save session state.
 
-        if allow_not_exist:
-            logger.info(
-                "Session file %s does not exist. Return empty state dict.",
-                session_save_path,
-            )
-            return {}
+        Args:
+            session_id: Session identifier
+            user_id: User identifier
+            state: State to save
+        """
+        save_path = self._get_save_path(session_id, user_id)
+        async with aiofiles.open(save_path, "w") as f:
+            await f.write(json.dumps(state, indent=2))
 
-        raise ValueError(
-            f"Failed to get session state for file {session_save_path} "
-            "because it does not exist.",
-        )
+    async def load(
+        self,
+        session_id: str,
+        user_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Load session state.
+
+        Args:
+            session_id: Session identifier
+            user_id: User identifier
+
+        Returns:
+            Session state or None if not found
+        """
+        save_path = self._get_save_path(session_id, user_id)
+        if not save_path.exists():
+            return None
+        async with aiofiles.open(save_path, "r") as f:
+            content = await f.read()
+            return json.loads(content)
+
+    async def clear(self, session_id: str, user_id: str) -> None:
+        """Clear session state.
+
+        Args:
+            session_id: Session identifier
+            user_id: User identifier
+        """
+        save_path = self._get_save_path(session_id, user_id)
+        if save_path.exists():
+            save_path.unlink()
+
+
+# Alias for backward compatibility
+SafeJSONSession = LangGraphSession

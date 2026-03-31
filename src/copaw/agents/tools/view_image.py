@@ -6,8 +6,7 @@ import os
 import unicodedata
 from pathlib import Path
 
-from agentscope.message import ImageBlock, TextBlock
-from agentscope.tool import ToolResponse
+from .tool_types import ToolResponse, text_content
 
 _IMAGE_EXTENSIONS = {
     ".png",
@@ -44,13 +43,7 @@ async def view_image(image_path: str) -> ToolResponse:
 
     if not resolved.exists() or not resolved.is_file():
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: {image_path} does not exist or "
-                    "is not a file.",
-                ),
-            ],
+            content=text_content(f"Error: {image_path} does not exist or is not a file."),
         )
 
     ext = resolved.suffix.lower()
@@ -59,24 +52,12 @@ async def view_image(image_path: str) -> ToolResponse:
         not mime or not mime.startswith("image/")
     ):
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: {resolved.name} is not a supported "
-                    "image format.",
-                ),
-            ],
+            content=text_content(f"Error: {resolved.name} is not a supported image format."),
         )
 
     return ToolResponse(
         content=[
-            ImageBlock(
-                type="image",
-                source={"type": "url", "url": str(resolved)},
-            ),
-            TextBlock(
-                type="text",
-                text=f"Image loaded: {resolved.name}",
-            ),
+            {"type": "image_url", "image_url": {"url": str(resolved)}},
+            {"type": "text", "text": f"Image loaded: {resolved.name}"},
         ],
     )

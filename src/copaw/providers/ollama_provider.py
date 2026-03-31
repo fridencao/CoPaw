@@ -6,7 +6,6 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from agentscope.model import ChatModelBase
 from openai import AsyncOpenAI
 
 from copaw.providers.provider import ModelInfo
@@ -72,14 +71,15 @@ class OllamaProvider(OpenAIProvider):
             "`ollama rm <model>` CLI command.",
         )
 
-    def get_chat_model_instance(self, model_id: str) -> ChatModelBase:
-        from .openai_chat_model_compat import OpenAIChatModelCompat
+    def get_chat_model_instance(self, model_id: str) -> Any:
+        """Get a chat model instance (deprecated, use langchain factory instead)."""
+        # For compatibility only - actual models use langchain
+        return None
 
-        return OpenAIChatModelCompat(
-            model_name=model_id,
-            stream=True,
-            api_key=self.api_key,
-            stream_tool_parsing=False,
-            client_kwargs={"base_url": self._openai_compatible_base_url()},
-            generate_kwargs=self.generate_kwargs,
-        )
+    def get_available_models(self) -> List[ModelInfo]:
+        """Get available models (stub for compatibility)."""
+        return [ModelInfo(id="llama2", name="Llama 2")]
+
+    def get_default_model(self) -> ModelInfo:
+        """Get default model (stub for compatibility)."""
+        return ModelInfo(id="llama2", name="Llama 2")

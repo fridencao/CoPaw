@@ -21,8 +21,7 @@ import sys
 import time
 from typing import Any, Optional
 
-from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from .tool_types import ToolResponse, text_content
 
 from ...config import (
     get_playwright_chromium_executable_path,
@@ -229,7 +228,7 @@ atexit.register(_atexit_cleanup)
 def _tool_response(text: str) -> ToolResponse:
     """Wrap text for agentscope Toolkit (return ToolResponse)."""
     return ToolResponse(
-        content=[TextBlock(type="text", text=text)],
+        content=text_content(text),
     )
 
 

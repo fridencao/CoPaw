@@ -5,8 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from .tool_types import ToolResponse, text_content
 
 from .utils import (
     truncate_text_output,
@@ -88,12 +87,7 @@ async def read_file(  # pylint: disable=too-many-return-statements
             start_line = int(start_line)
         except (ValueError, TypeError):
             return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=f"Error: start_line must be an integer, got {start_line!r}.",
-                    ),
-                ],
+                content=text_content(f"Error: start_line must be an integer, got {start_line!r}."),
             )
 
     if end_line is not None:
@@ -101,34 +95,19 @@ async def read_file(  # pylint: disable=too-many-return-statements
             end_line = int(end_line)
         except (ValueError, TypeError):
             return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=f"Error: end_line must be an integer, got {end_line!r}.",
-                    ),
-                ],
+                content=text_content(f"Error: end_line must be an integer, got {end_line!r}."),
             )
 
     file_path = _resolve_file_path(file_path)
 
     if not os.path.exists(file_path):
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: The file {file_path} does not exist.",
-                ),
-            ],
+            content=text_content(f"Error: The file {file_path} does not exist."),
         )
 
     if not os.path.isfile(file_path):
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: The path {file_path} is not a file.",
-                ),
-            ],
+            content=text_content(f"Error: The path {file_path} is not a file."),
         )
 
     try:
@@ -142,22 +121,12 @@ async def read_file(  # pylint: disable=too-many-return-statements
 
         if s > total:
             return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=f"Error: start_line {s} exceeds file length ({total} lines).",
-                    ),
-                ],
+                content=text_content(f"Error: start_line {s} exceeds file length ({total} lines)."),
             )
 
         if s > e:
             return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=f"Error: start_line ({s}) > end_line ({e}).",
-                    ),
-                ],
+                content=text_content(f"Error: start_line ({s}) > end_line ({e})."),
             )
 
         # Extract selected lines
@@ -190,18 +159,11 @@ async def read_file(  # pylint: disable=too-many-return-statements
             )
             text = text + notice
 
-        return ToolResponse(
-            content=[TextBlock(type="text", text=text)],
-        )
+        return ToolResponse(content=text_content(text))
 
     except Exception as e:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: Read file failed due to \n{e}",
-                ),
-            ],
+            content=text_content(f"Error: Read file failed due to \n{e}"),
         )
 
 
@@ -220,12 +182,7 @@ async def write_file(
 
     if not file_path:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text="Error: No `file_path` provided.",
-                ),
-            ],
+            content=text_content("Error: No `file_path` provided."),
         )
 
     file_path = _resolve_file_path(file_path)
@@ -235,21 +192,11 @@ async def write_file(
         with open(file_path, "w", encoding=encoding) as file:
             file.write(content)
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Wrote {len(content)} bytes to {file_path}.",
-                ),
-            ],
+            content=text_content(f"Wrote {len(content)} bytes to {file_path}."),
         )
     except Exception as e:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: Write file failed due to \n{e}",
-                ),
-            ],
+            content=text_content(f"Error: Write file failed due to \n{e}"),
         )
 
 
@@ -273,56 +220,31 @@ async def edit_file(
 
     if not file_path:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text="Error: No `file_path` provided.",
-                ),
-            ],
+            content=text_content("Error: No `file_path` provided."),
         )
 
     resolved_path = _resolve_file_path(file_path)
 
     if not os.path.exists(resolved_path):
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: The file {resolved_path} does not exist.",
-                ),
-            ],
+            content=text_content(f"Error: The file {resolved_path} does not exist."),
         )
 
     if not os.path.isfile(resolved_path):
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: The path {resolved_path} is not a file.",
-                ),
-            ],
+            content=text_content(f"Error: The path {resolved_path} is not a file."),
         )
 
     try:
         content = read_file_safe(resolved_path)
     except Exception as e:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: Read file failed due to \n{e}",
-                ),
-            ],
+            content=text_content(f"Error: Read file failed due to \n{e}"),
         )
 
     if old_text not in content:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: The text to replace was not found in {file_path}.",
-                ),
-            ],
+            content=text_content(f"Error: The text to replace was not found in {file_path}."),
         )
 
     new_content = content.replace(old_text, new_text)
@@ -331,18 +253,12 @@ async def edit_file(
         content=new_content,
     )
 
-    if write_response.content and len(write_response.content) > 0:
-        write_text = write_response.content[0].get("text", "")
-        if write_text.startswith("Error:"):
-            return write_response
+    write_text = write_response.text
+    if write_text.startswith("Error:"):
+        return write_response
 
     return ToolResponse(
-        content=[
-            TextBlock(
-                type="text",
-                text=f"Successfully replaced text in {file_path}.",
-            ),
-        ],
+        content=text_content(f"Successfully replaced text in {file_path}."),
     )
 
 
@@ -362,12 +278,7 @@ async def append_file(
 
     if not file_path:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text="Error: No `file_path` provided.",
-                ),
-            ],
+            content=text_content("Error: No `file_path` provided."),
         )
 
     file_path = _resolve_file_path(file_path)
@@ -377,19 +288,9 @@ async def append_file(
         with open(file_path, "a", encoding=encoding) as file:
             file.write(content)
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Appended {len(content)} bytes to {file_path}.",
-                ),
-            ],
+            content=text_content(f"Appended {len(content)} bytes to {file_path}."),
         )
     except Exception as e:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: Append file failed due to \n{e}",
-                ),
-            ],
+            content=text_content(f"Error: Append file failed due to \n{e}"),
         )

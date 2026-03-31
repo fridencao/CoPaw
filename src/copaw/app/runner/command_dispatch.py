@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 """Command dispatch: run command path without creating CoPawAgent.
 
-Yields (Msg, last) compatible with query_handler stream.
+Yields messages compatible with LangGraph query_handler stream.
 """
 from __future__ import annotations
 
 import logging
-from typing import AsyncIterator
-from typing import TYPE_CHECKING
+from typing import AsyncIterator, Any, List
 
-from agentscope.message import Msg, TextBlock
+from langchain_core.messages import AIMessage, HumanMessage
 
 from . import control_commands
 from .daemon_commands import (
@@ -22,17 +21,18 @@ from ...config.config import load_agent_config
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from .runner import AgentRunner
 
-
-def _get_last_user_text(msgs) -> str | None:
-    """Extract last user message text from msgs (runtime message list)."""
+def _get_last_user_text(msgs: List[Any]) -> str | None:
+    """Extract last user message text from msgs (LangGraph message list)."""
     if not msgs or len(msgs) == 0:
         return None
     last = msgs[-1]
-    if hasattr(last, "get_text_content"):
-        return last.get_text_content()
+
+    # LangGraph messages
+    if hasattr(last, "content"):
+        return last.content
+
+    # Dict format
     if isinstance(last, dict):
         content = last.get("content") or last.get("text")
         if isinstance(content, str):
@@ -48,223 +48,58 @@ def _is_conversation_command(query: str | None) -> bool:
     """True if query is a conversation command (/compact, /new, etc.)."""
     if not query or not query.startswith("/"):
         return False
-    cmd = query.strip().lstrip("/").split()[0] if query.strip() else ""
-    return cmd in CommandHandler.SYSTEM_COMMANDS
+
+    conversation_commands = {
+        "/compact",
+        "/new",
+        "/clear",
+        "/forget",
+    }
+    return query.strip().lower() in conversation_commands
 
 
-def _is_control_command(query: str | None) -> bool:
-    """True if query is a control command (/stop, etc.)."""
-    return control_commands.is_control_command(query)
+async def run_command_path(
+    runner: Any,
+    query: str,
+    daemon_context: DaemonContext | None = None,
+) -> AsyncIterator[tuple[AIMessage, bool]]:
+    """Run a command path and yield messages.
+
+    Args:
+        runner: Agent runner
+        query: Command query
+        daemon_context: Optional daemon context
+
+    Yields:
+        Tuples of (message, is_last)
+    """
+    from ...agents.command_handler import CommandHandler
+
+    # Load config and create command handler
+    config = load_agent_config(runner.agent_id)
+    command_handler = CommandHandler(config)
+
+    # Process command
+    async for msg in command_handler.handle_command(
+        query=query,
+        runner=runner,
+        daemon_context=daemon_context,
+    ):
+        yield (AIMessage(content=str(msg)), False)
+
+    yield (AIMessage(content=""), True)
 
 
 def _is_command(query: str | None) -> bool:
-    """True if query is any known command.
-
-    Priority order: daemon > control > conversation
-    """
-    if not query or not query.startswith("/"):
-        return False
-    if parse_daemon_query(query) is not None:
-        return True
-    if _is_control_command(query):
-        return True
-    return _is_conversation_command(query)
-
-
-async def run_command_path(  # pylint: disable=too-many-statements
-    request,
-    msgs,
-    runner: AgentRunner,
-) -> AsyncIterator[tuple]:
-    """Run command path and yield (msg, last) for each response.
-
-    Args:
-        request: AgentRequest (session_id, user_id, etc.)
-        msgs: List of messages from runtime (last is user input)
-        runner: AgentRunner (session, memory_manager, etc.)
-
-    Yields:
-        (Msg, bool) compatible with query_handler stream
-    """
-    query = _get_last_user_text(msgs)
+    """True if query is a command (starts with / or is daemon query)."""
     if not query:
-        return
+        return False
+    # Regular command
+    if query.startswith("/"):
+        return True
+    # Daemon query
+    return parse_daemon_query(query) is not None
 
-    session_id = getattr(request, "session_id", "") or ""
-    user_id = getattr(request, "user_id", "") or ""
 
-    # Daemon path
-    parsed = parse_daemon_query(query)
-    if parsed is not None:
-        handler = DaemonCommandHandlerMixin()
-        manager = getattr(runner, "_manager", None)
-        if parsed[0] == "restart":
-            logger.info(
-                "run_command_path: daemon restart, manager=%s",
-                "set" if manager is not None else "None",
-            )
-            # Yield hint first so user sees it before restart runs.
-            hint = Msg(
-                name="Friday",
-                role="assistant",
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=(
-                            "**Restart in progress**\n\n"
-                            "- Reloading agent with zero-downtime. "
-                            "Please wait."
-                        ),
-                    ),
-                ],
-            )
-            yield hint, True
-
-        agent_id = runner.agent_id
-        daemon_ctx = DaemonContext(
-            load_config_fn=lambda: load_agent_config(agent_id),
-            memory_manager=runner.memory_manager,
-            manager=manager,
-            agent_id=agent_id,
-            session_id=session_id,
-        )
-        msg = await handler.handle_daemon_command(query, daemon_ctx)
-        yield msg, True
-        logger.info("handle_daemon_command %s completed", query)
-        return
-
-    # Control command path (e.g. /stop)
-    if _is_control_command(query):
-        workspace = runner._workspace  # pylint: disable=protected-access
-        if workspace is None:
-            logger.error(
-                "run_command_path: control command but workspace not set",
-            )
-            error_msg = Msg(
-                name="Friday",
-                role="assistant",
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=(
-                            "**Error**\n\n"
-                            "Control command unavailable "
-                            "(workspace not initialized)"
-                        ),
-                    ),
-                ],
-            )
-            yield error_msg, True
-            return
-
-        # Get channel instance from request
-        channel_id = getattr(request, "channel", "")
-        channel = None
-
-        # Get channel_manager from workspace
-        channel_manager = workspace.channel_manager
-        if channel_manager is not None:
-            channel = await channel_manager.get_channel(channel_id)
-
-        if channel is None:
-            logger.error(
-                f"run_command_path: channel not found: {channel_id}",
-            )
-            error_msg = Msg(
-                name="Friday",
-                role="assistant",
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=f"**Error**\n\nChannel not found: {channel_id}",
-                    ),
-                ],
-            )
-            yield error_msg, True
-            return
-
-        # Extract user_id from request
-        user_id = getattr(request, "user_id", "")
-
-        # Build control context
-        control_ctx = control_commands.ControlContext(
-            workspace=workspace,
-            payload=request,
-            channel=channel,
-            session_id=session_id,
-            user_id=user_id,
-            args={},
-        )
-
-        # Handle control command
-        try:
-            response_text = await control_commands.handle_control_command(
-                query,
-                control_ctx,
-            )
-            response_msg = Msg(
-                name="Friday",
-                role="assistant",
-                content=[TextBlock(type="text", text=response_text)],
-            )
-            yield response_msg, True
-            logger.info("handle_control_command %s completed", query)
-        except Exception as e:
-            logger.exception(
-                f"Control command failed: {query}",
-            )
-            error_msg = Msg(
-                name="Friday",
-                role="assistant",
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=f"**Command Failed**\n\n{str(e)}",
-                    ),
-                ],
-            )
-            yield error_msg, True
-        return
-
-    # Conversation path: lightweight memory + CommandHandler
-    memory = runner.memory_manager.get_in_memory_memory()
-    session_state = await runner.session.get_session_state_dict(
-        session_id=session_id,
-        user_id=user_id,
-    )
-    memory_state = session_state.get("agent", {}).get("memory", {})
-    memory.load_state_dict(memory_state, strict=False)
-
-    conv_handler = CommandHandler(
-        agent_name="Friday",
-        memory=memory,
-        memory_manager=runner.memory_manager,
-        enable_memory_manager=runner.memory_manager is not None,
-    )
-    try:
-        response_msg = await conv_handler.handle_conversation_command(query)
-    except RuntimeError as e:
-        response_msg = Msg(
-            name="Friday",
-            role="assistant",
-            content=[TextBlock(type="text", text=str(e))],
-        )
-    yield response_msg, True
-
-    # Update memory key with session_id & user_id to session,
-    # but only if identifiers are present
-    if session_id and user_id:
-        await runner.session.update_session_state(
-            session_id=session_id,
-            key="agent.memory",
-            value=memory.state_dict(),
-            user_id=user_id,
-        )
-    else:
-        logger.warning(
-            "Skipping session_state update for conversation"
-            " memory due to missing session_id or user_id (session_id=%r, "
-            "user_id=%r)",
-            session_id,
-            user_id,
-        )
+# Import control_commands after defining helpers
+from . import control_commands

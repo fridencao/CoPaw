@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from agentscope.tool import (
-    execute_python_code,
-    view_text_file,
-    write_text_file,
-)
+"""Tools for CoPaw agents - LangGraph compatible version.
+
+This module provides a set of tools that can be used by agents.
+All tools return ToolResponse in a format compatible with LangGraph.
+"""
 
 from .file_io import (
     read_file,
@@ -24,11 +24,11 @@ from .memory_search import create_memory_search_tool
 from .get_current_time import get_current_time, set_user_timezone
 from .get_token_usage import get_token_usage
 
+# Import tool types for backward compatibility
+from .tool_types import ToolResponse, ToolResult, text_content, image_content
+
 __all__ = [
-    "execute_python_code",
     "execute_shell_command",
-    "view_text_file",
-    "write_text_file",
     "read_file",
     "write_file",
     "edit_file",
@@ -43,4 +43,8 @@ __all__ = [
     "get_current_time",
     "set_user_timezone",
     "get_token_usage",
+    "ToolResponse",
+    "ToolResult",
+    "text_content",
+    "image_content",
 ]

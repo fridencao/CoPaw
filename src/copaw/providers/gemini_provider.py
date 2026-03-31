@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
-"""A Google Gemini provider implementation using AgentScope's native
-GeminiChatModel."""
+"""A Google Gemini provider implementation.
+
+Note: This module provides configuration for Gemini models.
+For actual model execution, use the langchain factory.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +11,6 @@ import logging
 import time
 from typing import Any, List
 
-from agentscope.model import ChatModelBase
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types as genai_types
@@ -129,15 +131,21 @@ class GeminiProvider(Provider):
                 f"Unknown exception when connecting to model '{model_id}'",
             )
 
-    def get_chat_model_instance(self, model_id: str) -> ChatModelBase:
-        from agentscope.model import GeminiChatModel
+    def get_chat_model_instance(self, model_id: str) -> Any:
+        """Get a chat model instance (deprecated, use langchain factory instead)."""
+        # For compatibility only - actual models use langchain
+        return None
 
-        return GeminiChatModel(
-            model_name=model_id,
-            stream=True,
-            api_key=self.api_key,
-            generate_kwargs=self.generate_kwargs,
-        )
+    def get_available_models(self) -> List[ModelInfo]:
+        """Get available models (stub for compatibility)."""
+        return [
+            ModelInfo(id="gemini-2.0-flash", name="Gemini 2.0 Flash"),
+            ModelInfo(id="gemini-1.5-pro", name="Gemini 1.5 Pro"),
+        ]
+
+    def get_default_model(self) -> ModelInfo:
+        """Get default model (stub for compatibility)."""
+        return ModelInfo(id="gemini-2.0-flash", name="Gemini 2.0 Flash")
 
     async def probe_model_multimodal(
         self,

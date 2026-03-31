@@ -11,6 +11,7 @@ Each Workspace represents a standalone agent workspace with its own:
 All existing single-agent components are reused without modification.
 """
 import logging
+import os
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -22,7 +23,13 @@ from .service_factories import (
     create_agent_config_watcher,
     create_mcp_config_watcher,
 )
-from ..runner import AgentRunner
+
+# Check if we should use LangGraph
+_USE_LANGGRAPH = os.getenv("COPAW_USE_LANGGRAPH", "false").lower() == "true"
+
+# Always use LangGraph runner now
+from ..runner.runner import LangGraphRunner as CurrentRunner
+
 from ..runner.task_tracker import TaskTracker
 from ..mcp import MCPClientManager
 from ..crons.manager import CronManager
@@ -86,7 +93,7 @@ class Workspace:
 
     # Service access via properties (delegates to ServiceManager)
     @property
-    def runner(self) -> Optional[AgentRunner]:
+    def runner(self) -> Optional[CurrentRunner]:
         """Get runner instance from ServiceManager."""
         return self._service_manager.services.get("runner")
 
@@ -150,11 +157,11 @@ class Workspace:
         # pylint: disable=protected-access
         sm = self._service_manager
 
-        # Priority 10: Runner
+        # Priority 10: Runner (uses HybridRunner that can switch between AgentScope and LangGraph)
         sm.register(
             ServiceDescriptor(
                 name="runner",
-                service_class=AgentRunner,
+                service_class=CurrentRunner,
                 init_args=lambda ws: {
                     "agent_id": ws.agent_id,
                     "workspace_dir": ws.workspace_dir,
@@ -212,18 +219,9 @@ class Workspace:
             ),
         )
 
-        # Priority 25: Runner start
-        sm.register(
-            ServiceDescriptor(
-                name="runner_start",
-                service_class=None,
-                post_init=lambda ws, _: ws._service_manager.services[
-                    "runner"
-                ].start(),
-                priority=25,
-                concurrent_init=False,
-            ),
-        )
+        # Priority 25: Runner start (LangGraphRunner doesn't need explicit start)
+        # The runner is invoked on-demand via execute() method
+        # Removed: .start() call since LangGraphRunner doesn't have that method
 
         # Priority 30: Channel manager
         sm.register(

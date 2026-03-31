@@ -13,8 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from .tool_types import ToolResponse, text_content
 
 from ...constant import WORKING_DIR
 from ...config.context import get_current_workspace_dir
@@ -312,23 +311,11 @@ async def execute_shell_command(
                 response_parts.append(f"\n[stderr]\n{stderr_str}")
             response_text = "".join(response_parts)
 
-        return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=response_text,
-                ),
-            ],
-        )
+        return ToolResponse(content=text_content(response_text))
 
     except Exception as e:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: Shell command execution failed due to \n{e}",
-                ),
-            ],
+            content=text_content(f"Error: Shell command execution failed due to \n{e}"),
         )
 
 

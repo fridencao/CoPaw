@@ -7,8 +7,7 @@ import platform
 import subprocess
 import time
 
-from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from .tool_types import ToolResponse, text_content
 
 from ...config.context import get_current_workspace_dir
 from ...constant import WORKING_DIR
@@ -16,35 +15,25 @@ from ...constant import WORKING_DIR
 
 def _tool_error(msg: str) -> ToolResponse:
     return ToolResponse(
-        content=[
-            TextBlock(
-                type="text",
-                text=json.dumps(
-                    {"ok": False, "error": msg},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            ),
-        ],
+        content=text_content(json.dumps(
+            {"ok": False, "error": msg},
+            ensure_ascii=False,
+            indent=2,
+        )),
     )
 
 
 def _tool_ok(path: str, message: str) -> ToolResponse:
     return ToolResponse(
-        content=[
-            TextBlock(
-                type="text",
-                text=json.dumps(
-                    {
-                        "ok": True,
-                        "path": os.path.abspath(path),
-                        "message": message,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            ),
-        ],
+        content=text_content(json.dumps(
+            {
+                "ok": True,
+                "path": os.path.abspath(path),
+                "message": message,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )),
     )
 
 

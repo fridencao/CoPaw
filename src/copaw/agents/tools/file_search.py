@@ -12,8 +12,7 @@ from collections import deque
 from pathlib import Path
 from typing import Optional
 
-from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from .tool_types import ToolResponse, text_content
 
 from ...constant import WORKING_DIR
 from ...config.context import get_current_workspace_dir
@@ -128,7 +127,7 @@ def _relative_display(target: Path, root: Path) -> str:
 
 
 def _make_response(text: str) -> ToolResponse:
-    return ToolResponse(content=[TextBlock(type="text", text=text)])
+    return ToolResponse(content=text_content(text))
 
 
 def _resolve_search_root(

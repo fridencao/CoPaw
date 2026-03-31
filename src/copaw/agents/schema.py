@@ -5,7 +5,19 @@ Agent tools schema: type definitions for agent tool responses.
 from typing import Literal, Optional
 from typing_extensions import TypedDict, Required
 
-from agentscope.message import Base64Source, URLSource
+
+# Simple source types compatible with LangGraph
+class Base64Source(TypedDict, total=False):
+    """Base64 encoded source."""
+    type: Required[Literal["base64"]]
+    media_type: str
+    data: str
+
+
+class URLSource(TypedDict, total=False):
+    """URL source."""
+    type: Required[Literal["url"]]
+    url: str
 
 
 class FileBlock(TypedDict, total=False):

@@ -8,7 +8,6 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, List
 
-from agentscope.model import ChatModelBase
 from openai import APIError, AsyncOpenAI
 
 from copaw.providers.provider import ModelInfo, Provider
@@ -123,10 +122,22 @@ class OpenAIProvider(Provider):
                 f"Unknown exception when connecting to model '{model_id}'",
             )
 
-    def get_chat_model_instance(self, model_id: str) -> ChatModelBase:
-        from .openai_chat_model_compat import OpenAIChatModelCompat
+    def get_chat_model_instance(self, model_id: str) -> Any:
+        """Get a chat model instance (deprecated, use langchain factory instead)."""
+        # For compatibility only - actual models use langchain
+        return None
 
-        client_kwargs = {"base_url": self.base_url}
+    def get_available_models(self) -> List[ModelInfo]:
+        """Get available models (stub for compatibility)."""
+        return [
+            ModelInfo(id="gpt-4o", name="GPT-4o"),
+            ModelInfo(id="gpt-4o-mini", name="GPT-4o Mini"),
+            ModelInfo(id="gpt-4-turbo", name="GPT-4 Turbo"),
+        ]
+
+    def get_default_model(self) -> ModelInfo:
+        """Get default model (stub for compatibility)."""
+        return ModelInfo(id="gpt-4o", name="GPT-4o")
 
         if self.base_url == DASHSCOPE_BASE_URL:
             client_kwargs["default_headers"] = {

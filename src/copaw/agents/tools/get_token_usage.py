@@ -3,8 +3,7 @@
 
 from datetime import date, timedelta
 
-from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from .tool_types import ToolResponse, text_content
 
 from ...token_usage import get_token_usage_manager
 
@@ -80,6 +79,4 @@ async def get_token_usage(
         )
 
     text = "\n".join(lines) if lines else "No token usage data in this period."
-    return ToolResponse(
-        content=[TextBlock(type="text", text=text)],
-    )
+    return ToolResponse(content=text_content(text))

@@ -1,26 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Retry wrapper for ChatModelBase instances.
+"""Retry wrapper for chat model instances.
 
-Transparently retries LLM API calls on transient errors (rate-limit,
-timeout, connection) with configurable exponential back-off.
-
-Concurrency and rate-limit control (LLMRateLimiter):
-- A global semaphore caps the number of concurrent in-flight LLM calls,
-  preventing a burst of requests from hammering the upstream API.
-- When a 429 is received every concurrent caller is paused for the same
-  duration (plus per-caller jitter) before re-trying, eliminating the
-  thundering-herd problem where multiple callers retry at the same instant.
-
-Semaphore ownership rules:
-- Non-streaming: __call__'s finally block always releases the slot
-  (owns_semaphore stays True throughout).
-- Streaming: ownership transfers to _consume_stream_with_slot the moment
-  __call__ returns the generator.  owns_semaphore is set to False before
-  the return so __call__'s finally skips the release.
-  _consume_stream_with_slot releases after the first chunk arrives.
-- Cancellation safety: the boolean flag `acquired` tracks whether the
-  semaphore slot has actually been taken; the final block only releases
-  when acquired is True, preventing a spurious release on CancelledError.
+Deprecated: This module is kept for backward compatibility.
+For actual model execution with retry, use langchain callbacks.
 """
 
 from __future__ import annotations
@@ -29,9 +11,6 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator
-
-from agentscope.model import ChatModelBase
-from agentscope.model._model_response import ChatResponse
 
 from ..constant import (
     LLM_ACQUIRE_TIMEOUT,

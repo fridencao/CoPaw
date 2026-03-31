@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""An Anthropic provider implementation."""
+"""An Anthropic provider implementation.
+
+Note: This module provides configuration for Anthropic models.
+For actual model execution, use the langchain factory.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,6 @@ import logging
 import time
 from typing import Any, List
 
-from agentscope.model import ChatModelBase
 import anthropic
 
 from copaw.providers.multimodal_prober import (
@@ -125,43 +128,21 @@ class AnthropicProvider(Provider):
                 f"Unknown exception when connecting to model '{model_id}'",
             )
 
-    def get_chat_model_instance(self, model_id: str) -> ChatModelBase:
-        from agentscope.model import AnthropicChatModel
+    def get_chat_model_instance(self, model_id: str) -> Any:
+        """Get a chat model instance (deprecated, use langchain factory instead)."""
+        # For compatibility only - actual models use langchain
+        return None
 
-        client_kwargs = {"base_url": self.base_url}
-        if self.base_url == DASHSCOPE_BASE_URL:
-            client_kwargs["default_headers"] = {
-                "x-dashscope-agentapp": json.dumps(
-                    {
-                        "agentType": "CoPaw",
-                        "deployType": "UnKnown",
-                        "moduleCode": "model",
-                        "agentCode": "UnKnown",
-                    },
-                    ensure_ascii=False,
-                ),
-            }
-        elif self.base_url == CODING_DASHSCOPE_BASE_URL:
-            client_kwargs["default_headers"] = {
-                "X-DashScope-Cdpl": json.dumps(
-                    {
-                        "agentType": "CoPaw",
-                        "deployType": "UnKnown",
-                        "moduleCode": "model",
-                        "agentCode": "UnKnown",
-                    },
-                    ensure_ascii=False,
-                ),
-            }
+    def get_available_models(self) -> List[ModelInfo]:
+        """Get available models (stub for compatibility)."""
+        return [
+            ModelInfo(id="claude-3-5-sonnet-20241022", name="Claude 3.5 Sonnet"),
+            ModelInfo(id="claude-3-opus-20240229", name="Claude 3 Opus"),
+        ]
 
-        return AnthropicChatModel(
-            model_name=model_id,
-            stream=True,
-            api_key=self.api_key,
-            stream_tool_parsing=False,
-            client_kwargs=client_kwargs,
-            generate_kwargs=self.generate_kwargs,
-        )
+    def get_default_model(self) -> ModelInfo:
+        """Get default model (stub for compatibility)."""
+        return ModelInfo(id="claude-3-5-sonnet-20241022", name="Claude 3.5 Sonnet")
 
     async def probe_model_multimodal(
         self,

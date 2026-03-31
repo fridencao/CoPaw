@@ -1,15 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Chat models for runner with UUID management."""
+"""Chat models for runner with UUID management.
+
+This module provides chat models compatible with LangGraph.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List, Union
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
-from agentscope_runtime.engine.schemas.agent_schemas import Message
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 from ..channels.schema import DEFAULT_CHANNEL
+
+# Type alias for messages (LangGraph compatible)
+Message = Union[HumanMessage, AIMessage, BaseMessage]
 
 
 class ChatSpec(BaseModel):
@@ -50,7 +56,7 @@ class ChatSpec(BaseModel):
 class ChatHistory(BaseModel):
     """Complete chat view with spec and state."""
 
-    messages: list[Message] = Field(default_factory=list)
+    messages: List[BaseMessage] = Field(default_factory=list)
     status: str = Field(
         default="idle",
         description="Conversation status: idle or running",

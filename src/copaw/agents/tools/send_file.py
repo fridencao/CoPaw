@@ -5,13 +5,7 @@ import os
 import mimetypes
 import unicodedata
 
-from agentscope.tool import ToolResponse
-from agentscope.message import (
-    TextBlock,
-    ImageBlock,
-    AudioBlock,
-    VideoBlock,
-)
+from .tool_types import ToolResponse, text_content
 
 from ..schema import FileBlock
 
@@ -47,22 +41,12 @@ async def send_file_to_user(
 
     if not os.path.exists(file_path):
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: The file {file_path} does not exist.",
-                ),
-            ],
+            content=text_content(f"Error: The file {file_path} does not exist."),
         )
 
     if not os.path.isfile(file_path):
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: The path {file_path} is not a file.",
-                ),
-            ],
+            content=text_content(f"Error: The path {file_path} is not a file."),
         )
 
     # Detect MIME type
@@ -78,45 +62,26 @@ async def send_file_to_user(
         file_url = f"file://{absolute_path}"
         source = {"type": "url", "url": file_url}
 
-        if as_type == "image":
-            return ToolResponse(
-                content=[
-                    ImageBlock(type="image", source=source),
-                    TextBlock(type="text", text="File sent successfully."),
-                ],
-            )
-        if as_type == "audio":
-            return ToolResponse(
-                content=[
-                    AudioBlock(type="audio", source=source),
-                    TextBlock(type="text", text="File sent successfully."),
-                ],
-            )
-        if as_type == "video":
-            return ToolResponse(
-                content=[
-                    VideoBlock(type="video", source=source),
-                    TextBlock(type="text", text="File sent successfully."),
-                ],
-            )
+        content_parts = []
 
-        return ToolResponse(
-            content=[
-                FileBlock(
-                    type="file",
-                    source=source,
-                    filename=os.path.basename(file_path),
-                ),
-                TextBlock(type="text", text="File sent successfully."),
-            ],
-        )
+        if as_type == "image":
+            content_parts.append({"type": "image_url", "image_url": {"url": file_url}})
+        elif as_type == "audio":
+            content_parts.append({"type": "audio", "audio": file_url})
+        elif as_type == "video":
+            content_parts.append({"type": "video", "video": file_url})
+        else:
+            content_parts.append({
+                "type": "file",
+                "source": source,
+                "filename": os.path.basename(file_path),
+            })
+
+        content_parts.append({"type": "text", "text": "File sent successfully."})
+
+        return ToolResponse(content=content_parts)
 
     except Exception as e:
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: Send file failed due to \n{e}",
-                ),
-            ],
+            content=text_content(f"Error: Send file failed due to \n{e}"),
         )

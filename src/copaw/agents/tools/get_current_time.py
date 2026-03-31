@@ -5,8 +5,7 @@ import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from .tool_types import ToolResponse, text_content
 
 from ...config import load_config, save_config
 
@@ -38,14 +37,7 @@ async def get_current_time() -> ToolResponse:
         f"{user_tz} ({now.strftime('%A')})"
     )
 
-    return ToolResponse(
-        content=[
-            TextBlock(
-                type="text",
-                text=time_str,
-            ),
-        ],
-    )
+    return ToolResponse(content=text_content(time_str))
 
 
 async def set_user_timezone(timezone_name: str) -> ToolResponse:
@@ -61,20 +53,13 @@ async def set_user_timezone(timezone_name: str) -> ToolResponse:
     """
     tz_name = timezone_name.strip()
     if not tz_name:
-        return ToolResponse(
-            content=[TextBlock(type="text", text="Error: timezone is empty.")],
-        )
+        return ToolResponse(content=text_content("Error: timezone is empty."))
 
     try:
         now = datetime.now(ZoneInfo(tz_name))
     except (ZoneInfoNotFoundError, KeyError):
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Error: invalid timezone '{tz_name}'.",
-                ),
-            ],
+            content=text_content(f"Error: invalid timezone '{tz_name}'."),
         )
 
     config = load_config()
@@ -86,10 +71,5 @@ async def set_user_timezone(timezone_name: str) -> ToolResponse:
         f"{tz_name} ({now.strftime('%A')})"
     )
     return ToolResponse(
-        content=[
-            TextBlock(
-                type="text",
-                text=f"Timezone set to {tz_name}. Current time: {time_str}",
-            ),
-        ],
+        content=text_content(f"Timezone set to {tz_name}. Current time: {time_str}"),
     )

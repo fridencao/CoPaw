@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Memory search tool for semantic search in memory files."""
-from agentscope.tool import ToolResponse
-from agentscope.message import TextBlock
+
+from .tool_types import ToolResponse, text_content
 
 
 def create_memory_search_tool(memory_manager):
@@ -40,30 +40,35 @@ def create_memory_search_tool(memory_manager):
         """
         if memory_manager is None:
             return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text="Error: Memory manager is not enabled.",
-                    ),
-                ],
+                content=text_content("Error: Memory manager is not enabled."),
             )
 
         try:
-            # memory_manager.memory_search already returns ToolResponse
-            return await memory_manager.memory_search(
+            # memory_manager.memory_search returns search results
+            result = await memory_manager.memory_search(
                 query=query,
                 max_results=max_results,
                 min_score=min_score,
             )
+            # Format results as text
+            if isinstance(result, dict) and "results" in result:
+                results = result["results"]
+                if not results:
+                    return ToolResponse(content=text_content("No relevant memories found."))
+
+                formatted = []
+                for r in results:
+                    text = r.get("content", "")
+                    path = r.get("path", "unknown")
+                    score = r.get("score", 0)
+                    formatted.append(f"[{path}] (score: {score:.2f})\n{text}\n")
+
+                return ToolResponse(content=text_content("\n---\n".join(formatted)))
+            return ToolResponse(content=text_content(str(result)))
 
         except Exception as e:
             return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=f"Error: Memory search failed due to\n{e}",
-                    ),
-                ],
+                content=text_content(f"Error: Memory search failed due to\n{e}"),
             )
 
     return memory_search

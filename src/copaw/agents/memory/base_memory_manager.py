@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Abstract base class for CoPaw memory managers."""
+"""Abstract base class for CoPaw memory managers.
+
+This module provides LangGraph-compatible memory management.
+"""
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
-
-from agentscope.formatter import FormatterBase
-from agentscope.message import Msg
-from agentscope.model import ChatModelBase
-from agentscope.tool import ToolResponse
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.language_models import BaseChatModel
 
 if TYPE_CHECKING:
-    from reme.memory.file_based.reme_in_memory_memory import ReMeInMemoryMemory
+    from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
 logger = logging.getLogger(__name__)
@@ -28,11 +28,7 @@ class BaseMemoryManager(ABC):
     including compaction, summarization, semantic search, and lifecycle
     management.
 
-    Attributes:
-        working_dir: Working directory path for memory storage.
-        agent_id: Unique agent identifier.
-        chat_model: Chat model used for compaction and summarization.
-        formatter: Formatter paired with the chat model.
+    This version uses LangGraph-compatible messages.
     """
 
     def __init__(
@@ -48,11 +44,21 @@ class BaseMemoryManager(ABC):
         """
         self.working_dir: str = working_dir
         self.agent_id: str = agent_id
-        self.chat_model: Optional[ChatModelBase] = None
-        self.formatter: Optional[FormatterBase] = None
+        self.chat_model: Optional[BaseChatModel] = None
 
         # Initialize list to track background summarization tasks
         self.summary_tasks: list[asyncio.Task] = []
+
+        # LangGraph checkpointer for persistence
+        self._checkpointer: Optional[BaseCheckpointSaver] = None
+
+    def set_checkpointer(self, checkpointer: "BaseCheckpointSaver") -> None:
+        """Set the LangGraph checkpointer for persistence.
+
+        Args:
+            checkpointer: LangGraph checkpointer instance
+        """
+        self._checkpointer = checkpointer
 
     @abstractmethod
     async def start(self) -> None:
@@ -84,7 +90,7 @@ class BaseMemoryManager(ABC):
     @abstractmethod
     async def compact_memory(
         self,
-        messages: list[Msg],
+        messages: List[BaseMessage],
         previous_summary: str = "",
         **kwargs,
     ) -> str:
@@ -100,7 +106,11 @@ class BaseMemoryManager(ABC):
         """
 
     @abstractmethod
-    async def summary_memory(self, messages: list[Msg], **kwargs) -> str:
+    async def summary_memory(
+        self,
+        messages: List[BaseMessage],
+        **kwargs,
+    ) -> str:
         """Generate a comprehensive summary of the given messages.
 
         Args:
@@ -111,9 +121,8 @@ class BaseMemoryManager(ABC):
             Comprehensive summary string.
         """
 
-    def add_async_summary_task(self, messages: list[Msg], **kwargs):
+    def add_async_summary_task(self, messages: List[BaseMessage], **kwargs):
         """Add an asynchronous summary task for the given messages."""
-
         remaining_tasks = []
         for task in self.summary_tasks:
             if task.done():
@@ -136,60 +145,34 @@ class BaseMemoryManager(ABC):
         self.summary_tasks.append(task)
 
     async def await_summary_tasks(self) -> str:
-        """
-        Wait for all background summary tasks to complete and collect results.
-
-        Blocks until all pending summary tasks in the task list have completed,
-        canceled, or failed. Collects status information from each task and
-        clears the task list after processing.
-
-        Returns:
-            str: A concatenated string of status messages, including:
-                - Completion confirmations with results
-                - Cancellation notices
-                - Error messages for failed tasks
-
-        Note:
-            - This method will block if any tasks are still running
-            - All tasks are removed from summary_tasks after this call
-            - Task exceptions are logged but do not raise to the caller
-            - Use this before application shutdown
-        """
+        """Wait for all background summary tasks to complete."""
         result = ""
         for task in self.summary_tasks:
             if task.done():
-                # Task has already completed, check its status
                 if task.cancelled():
                     logger.warning("Summary task was cancelled.")
                     result += "Summary task was cancelled.\n"
                 else:
-                    # Check if the task raised an exception
                     exc = task.exception()
                     if exc is not None:
                         logger.error(f"Summary task failed: {exc}")
                         result += f"Summary task failed: {exc}\n"
                     else:
-                        # Task completed successfully, collect result
                         task_result = task.result()
                         logger.info(f"Summary task completed: {task_result}")
                         result += f"Summary task completed: {task_result}\n"
-
             else:
-                # Task is still running, wait for it to complete
                 try:
                     task_result = await task
                     logger.info(f"Summary task completed: {task_result}")
                     result += f"Summary task completed: {task_result}\n"
-
                 except asyncio.CancelledError:
                     logger.warning("Summary task was cancelled while waiting.")
                     result += "Summary task was cancelled.\n"
-
                 except Exception as e:
                     logger.exception(f"Summary task failed: {e}")
                     result += f"Summary task failed: {e}\n"
 
-        # Clear the task list after processing all tasks
         self.summary_tasks.clear()
         return result
 
@@ -199,7 +182,7 @@ class BaseMemoryManager(ABC):
         query: str,
         max_results: int = 5,
         min_score: float = 0.1,
-    ) -> ToolResponse:
+    ) -> Any:
         """Search stored memories for relevant content.
 
         Args:
@@ -208,11 +191,11 @@ class BaseMemoryManager(ABC):
             min_score: Minimum relevance score threshold.
 
         Returns:
-            ToolResponse containing search results.
+            Search results.
         """
 
     @abstractmethod
-    def get_in_memory_memory(self, **kwargs) -> "ReMeInMemoryMemory | None":
+    def get_in_memory_memory(self, **kwargs) -> Any:
         """Retrieve the in-memory memory object for the agent.
 
         Args:
@@ -221,3 +204,7 @@ class BaseMemoryManager(ABC):
         Returns:
             In-memory memory instance.
         """
+
+
+# Type alias for backward compatibility
+ToolResponse = dict  # Simplified for LangGraph
