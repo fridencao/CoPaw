@@ -900,8 +900,17 @@ class ProviderManager:
         provider_path = provider_dir / f"{provider.id}.json"
         if skip_if_exists and provider_path.exists():
             return
+        # Manually extract provider data
+        provider_data = {
+            "id": provider.id,
+            "name": provider.name,
+            "base_url": provider.base_url,
+            "api_key": provider.api_key,
+            "chat_model": getattr(provider, "chat_model", ""),
+            "is_custom": not is_builtin,
+        }
         with open(provider_path, "w", encoding="utf-8") as f:
-            json.dump(provider.model_dump(), f, ensure_ascii=False, indent=2)
+            json.dump(provider_data, f, ensure_ascii=False, indent=2)
         try:
             os.chmod(provider_path, 0o600)
         except OSError:
@@ -933,15 +942,38 @@ class ProviderManager:
     def _provider_from_data(self, data: Dict) -> Provider:
         """Deserialize provider data to a concrete provider type."""
         provider_id = str(data.get("id", ""))
+        base_url = str(data.get("base_url", ""))
+        api_key = str(data.get("api_key", ""))
         chat_model = str(data.get("chat_model", ""))
+        extra_models = data.get("extra_models", [])
 
         if provider_id == "anthropic" or chat_model == "AnthropicChatModel":
-            return AnthropicProvider.model_validate(data)
+            return AnthropicProvider(
+                id=provider_id,
+                name=data.get("name", provider_id),
+                base_url=base_url,
+                api_key=api_key,
+            )
         if provider_id == "gemini" or chat_model == "GeminiChatModel":
-            return GeminiProvider.model_validate(data)
+            return GeminiProvider(
+                id=provider_id,
+                name=data.get("name", provider_id),
+                base_url=base_url,
+                api_key=api_key,
+            )
         if provider_id == "ollama":
-            return OllamaProvider.model_validate(data)
-        return OpenAIProvider.model_validate(data)
+            return OllamaProvider(
+                id=provider_id,
+                name=data.get("name", provider_id),
+                base_url=base_url,
+                api_key=api_key,
+            )
+        return OpenAIProvider(
+            id=provider_id,
+            name=data.get("name", provider_id),
+            base_url=base_url,
+            api_key=api_key,
+        )
 
     def save_active_model(self, active_model: ModelSlotConfig):
         """Save the active provider/model configuration to disk."""
