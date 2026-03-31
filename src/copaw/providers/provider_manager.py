@@ -5,13 +5,11 @@ providers, adding/removing custom providers, and fetching provider details."""
 
 import asyncio
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 import logging
 import json
 
 from pydantic import BaseModel
-
-from agentscope.model import ChatModelBase
 
 from copaw.providers.provider import (
     ModelInfo,
@@ -616,14 +614,16 @@ class ProviderManager:
         self.builtin_providers[provider.id] = provider
 
     async def list_provider_info(self) -> List[ProviderInfo]:
-        tasks = [
-            provider.get_info() for provider in self.builtin_providers.values()
+        # Use to_provider_info() which is synchronous
+        provider_infos = [
+            provider.to_provider_info()
+            for provider in self.builtin_providers.values()
         ]
-        tasks += [
-            provider.get_info() for provider in self.custom_providers.values()
+        provider_infos += [
+            provider.to_provider_info()
+            for provider in self.custom_providers.values()
         ]
-        provider_infos = await asyncio.gather(*tasks)
-        return list(provider_infos)
+        return provider_infos
 
     def get_provider(self, provider_id: str) -> Provider | None:
         # Return a provider instance by its ID. This will be used to create
@@ -636,7 +636,7 @@ class ProviderManager:
 
     async def get_provider_info(self, provider_id: str) -> ProviderInfo | None:
         provider = self.get_provider(provider_id)
-        return await provider.get_info() if provider else None
+        return provider.to_provider_info() if provider else None
 
     def get_active_model(self) -> ModelSlotConfig | None:
         # Return the currently active provider/model configuration.
@@ -735,7 +735,7 @@ class ProviderManager:
         provider.support_connection_check = False
         self.custom_providers[provider.id] = provider
         self._save_provider(provider, is_builtin=False)
-        return await provider.get_info()
+        return provider.to_provider_info()
 
     def remove_custom_provider(self, provider_id: str) -> bool:
         # Remove a custom provider by its ID. This will update the
@@ -771,7 +771,9 @@ class ProviderManager:
         """Schedule multimodal probing for a model if capability is unknown."""
         provider = self.get_provider(provider_id)
         # Auto-probe multimodal if not yet probed
-        for model in provider.models + provider.extra_models:
+        models = getattr(provider, 'models', []) or []
+        extra_models = getattr(provider, 'extra_models', []) or []
+        for model in models + extra_models:
             if model.id == model_id and model.supports_multimodal is None:
                 asyncio.create_task(
                     self._auto_probe_multimodal(provider_id, model_id),
@@ -809,7 +811,7 @@ class ProviderManager:
             provider,
             is_builtin=provider_id in self.builtin_providers,
         )
-        return await provider.get_info()
+        return provider.to_provider_info()
 
     async def delete_model_from_provider(
         self,
@@ -824,7 +826,7 @@ class ProviderManager:
             provider,
             is_builtin=provider_id in self.builtin_providers,
         )
-        return await provider.get_info()
+        return provider.to_provider_info()
 
     async def probe_model_multimodal(
         self,
@@ -839,7 +841,9 @@ class ProviderManager:
         result = await provider.probe_model_multimodal(model_id)
 
         # Update the model's capability flags
-        for model in provider.models + provider.extra_models:
+        models = getattr(provider, 'models', []) or []
+        extra_models = getattr(provider, 'extra_models', []) or []
+        for model in models + extra_models:
             if model.id == model_id:
                 model.supports_image = result.supports_image
                 model.supports_video = result.supports_video
@@ -1066,6 +1070,9 @@ class ProviderManager:
 
         registry = ExpectedCapabilityRegistry()
         for provider in self.builtin_providers.values():
+            # Skip providers without models (e.g., local model providers)
+            if not hasattr(provider, 'models') or not provider.models:
+                continue
             for model in provider.models:
                 # Already fully annotated (e.g. by a prior probe) → skip
                 if model.supports_multimodal is not None:
@@ -1093,7 +1100,8 @@ class ProviderManager:
 
     async def _resume_local_model(self, local_manager) -> None:
         """Resume the active local model server from the previous run."""
-        local_models = self.get_provider("copaw-local").extra_models
+        provider = self.get_provider("copaw-local")
+        local_models = getattr(provider, 'extra_models', []) or []
         model_id = local_models[0].id if local_models else None
         if model_id is None:
             return
@@ -1139,8 +1147,11 @@ class ProviderManager:
         return ProviderManager._instance
 
     @staticmethod
-    def get_active_chat_model() -> ChatModelBase:
-        """Get the currently active provider/model configuration."""
+    def get_active_chat_model() -> Any:
+        """Get the currently active provider/model configuration.
+
+        Deprecated: Returns Any type. Use create_langchain_model_by_agent_id instead.
+        """
         manager = ProviderManager.get_instance()
         model = manager.get_active_model()
         if model is None or model.provider_id == "" or model.model == "":

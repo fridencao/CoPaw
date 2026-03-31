@@ -202,14 +202,14 @@ export function RemoteModelManageModal({
       if (result.added_count > 0) {
         message.success(
           t("models.autoDiscoveredAndAdded", {
-            count: result.models.length,
+            count: result.models?.length ?? 0,
             added: result.added_count,
           }),
         );
         await onSaved();
-      } else if (result.models.length > 0) {
+      } else if ((result.models?.length ?? 0) > 0) {
         message.info(
-          t("models.autoDiscoveredNoNew", { count: result.models.length }),
+          t("models.autoDiscoveredNoNew", { count: result.models?.length ?? 0 }),
         );
         await onSaved();
       } else {
@@ -229,7 +229,7 @@ export function RemoteModelManageModal({
   useEffect(() => {
     // Do not auto-discover models when modal opens, as it may take some time and we don't want to block the UI.
     // Instead, users can click the "Discover Models" button to trigger discovery when needed.
-  }, [open, canDiscover, provider.id, provider.models.length]);
+  }, [open, canDiscover, provider.id, provider.models?.length]);
 
   const all_models = [
     ...(provider.models ?? []),

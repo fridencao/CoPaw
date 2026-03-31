@@ -57,7 +57,9 @@ export function RemoteProviderCard({
     });
   };
 
-  const totalCount = provider.models.length + provider.extra_models.length;
+  const models = provider.models ?? [];
+  const extraModels = provider.extra_models ?? [];
+  const totalCount = models.length + extraModels.length;
 
   let isConfigured = false;
 

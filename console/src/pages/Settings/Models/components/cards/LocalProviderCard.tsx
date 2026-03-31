@@ -24,7 +24,9 @@ export function LocalProviderCard({
   const { t } = useTranslation();
   const [modelManageOpen, setModelManageOpen] = useState(false);
 
-  const totalCount = provider.models.length + provider.extra_models.length;
+  const models = provider.models ?? [];
+  const extraModels = provider.extra_models ?? [];
+  const totalCount = models.length + extraModels.length;
   const statusReady = totalCount > 0;
   const statusLabel = statusReady
     ? t("models.available")

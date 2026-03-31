@@ -32,12 +32,14 @@ export function ModelManageModal({
   const [form] = Form.useForm();
   // --- Remote provider logic ---
 
+  const allModels = provider.models ?? [];
+  const extraModels = provider.extra_models ?? [];
   // For custom providers ALL models are deletable.
   // For built-in providers only extra_models are deletable.
   const extraModelIds = new Set(
     provider.is_custom
-      ? provider.models.map((m) => m.id)
-      : (provider.extra_models || []).map((m) => m.id),
+      ? allModels.map((m) => m.id)
+      : extraModels.map((m) => m.id),
   );
 
   const handleAddModel = async () => {
