@@ -62,6 +62,12 @@ export const providerApi = {
       { method: "DELETE" },
     ),
 
+  deleteProvider: (providerId: string) =>
+    request<ProviderInfo[]>(
+      `/models/providers/${encodeURIComponent(providerId)}`,
+      { method: "DELETE" },
+    ),
+
   /* ---- Model CRUD (works for both built-in and custom providers) ---- */
 
   addModel: (providerId: string, body: AddModelRequest) =>

@@ -43,7 +43,7 @@ export function RemoteProviderCard({
       cancelText: t("models.cancel"),
       onOk: async () => {
         try {
-          await api.deleteCustomProvider(provider.id);
+          await api.deleteProvider(provider.id);
           message.success(t("models.providerDeleted", { name: provider.name }));
           onSaved();
         } catch (error) {
@@ -202,17 +202,15 @@ export function RemoteProviderCard({
           >
             {t("models.settings")}
           </Button>
-          {provider.is_custom && (
-            <Button
-              type="default"
-              size="small"
-              danger
-              onClick={handleDeleteProvider}
-              className={styles.actionBtn}
-            >
-              {t("common.delete")}
-            </Button>
-          )}
+          <Button
+            type="default"
+            size="small"
+            danger
+            onClick={handleDeleteProvider}
+            className={styles.actionBtn}
+          >
+            {t("common.delete")}
+          </Button>
         </div>
       )}
 

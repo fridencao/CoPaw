@@ -748,6 +748,52 @@ class ProviderManager:
             return True
         return False
 
+    def reset_builtin_provider(self, provider_id: str) -> bool:
+        """Reset a builtin provider to its default state by clearing user config.
+
+        This removes the stored configuration file for the builtin provider,
+        effectively resetting it to default settings (no API key, default URL).
+
+        Args:
+            provider_id: The ID of the builtin provider to reset
+
+        Returns:
+            True if successful, False if provider not found or not builtin
+        """
+        if provider_id not in self.builtin_providers:
+            return False
+
+        provider = self.builtin_providers[provider_id]
+        # Clear user-configured settings
+        provider.api_key = ""
+        provider.extra_models = []
+        provider.generate_kwargs = {}
+        # Reset URL to default if it was changed
+        if not provider.freeze_url:
+            # Get the original default URL based on provider ID
+            default_urls = {
+                "modelscope": "https://api-inference.modelscope.cn/v1",
+                "dashscope": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "aliyun-codingplan": "https://coding.dashscope.aliyuncs.com/v1",
+                "openai": "https://api.openai.com/v1",
+                "kimi-cn": "https://api.moonshot.cn/v1",
+                "kimi-intl": "https://api.moonshot.ai/v1",
+                "deepseek": "https://api.deepseek.com",
+                "anthropic": "https://api.anthropic.com",
+                "gemini": "https://generativelanguage.googleapis.com",
+                "minimax-cn": "https://api.minimaxi.com/anthropic",
+                "minimax": "https://api.minimax.io/anthropic",
+                "lmstudio": "http://localhost:1234/v1",
+            }
+            if provider_id in default_urls:
+                provider.base_url = default_urls[provider_id]
+
+        # Remove the stored config file
+        provider_path = self.builtin_path / f"{provider_id}.json"
+        if provider_path.exists():
+            os.remove(provider_path)
+        return True
+
     async def activate_model(self, provider_id: str, model_id: str):
         # Set the active provider and model for the agent. This will update
         # providers.json and determine which provider/model is used when the

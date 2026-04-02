@@ -372,6 +372,42 @@ async def delete_custom_provider_endpoint(
     return await manager.list_provider_info()
 
 
+@router.delete(
+    "/providers/{provider_id}",
+    response_model=List[ProviderInfo],
+    summary="Delete any provider (custom or builtin)",
+)
+async def delete_any_provider_endpoint(
+    manager: ProviderManager = Depends(get_provider_manager),
+    provider_id: str = Path(...),
+) -> List[ProviderInfo]:
+    """Delete a provider. For custom providers, removes completely.
+    For builtin providers, resets to default state (clears API key and extra models).
+    """
+    # Try to delete custom provider first
+    if provider_id in manager.custom_providers:
+        ok = manager.remove_custom_provider(provider_id)
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to delete custom provider '{provider_id}'",
+            )
+    elif provider_id in manager.builtin_providers:
+        # For builtin providers, reset to default state
+        ok = manager.reset_builtin_provider(provider_id)
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to reset builtin provider '{provider_id}'",
+            )
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Provider '{provider_id}' not found",
+        )
+    return await manager.list_provider_info()
+
+
 @router.post(
     "/{provider_id}/models",
     response_model=ProviderInfo,
