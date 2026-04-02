@@ -909,6 +909,13 @@ class ProviderManager:
             "chat_model": getattr(provider, "chat_model", ""),
             "is_custom": not is_builtin,
         }
+        # Save extra_models if present
+        extra_models = getattr(provider, "extra_models", None)
+        if extra_models:
+            provider_data["extra_models"] = [
+                {"id": m.id, "name": m.name}
+                for m in extra_models
+            ]
         with open(provider_path, "w", encoding="utf-8") as f:
             json.dump(provider_data, f, ensure_ascii=False, indent=2)
         try:
@@ -1078,8 +1085,10 @@ class ProviderManager:
                 if not builtin.freeze_url:
                     builtin.base_url = provider.base_url
                 builtin.api_key = provider.api_key
-                builtin.extra_models = provider.extra_models
-                builtin.generate_kwargs.update(provider.generate_kwargs)
+                builtin.extra_models = getattr(provider, "extra_models", [])
+                builtin.generate_kwargs.update(
+                    getattr(provider, "generate_kwargs", {})
+                )
         # Load custom providers
         for provider_file in self.custom_path.glob("*.json"):
             provider = self.load_provider(provider_file.stem, is_builtin=False)
