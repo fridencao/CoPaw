@@ -80,7 +80,7 @@ class LangGraphRunnerAdapter:
             return self._runner
 
         # Load agent config
-        from ...config.config import load_agent_config
+        from copaw.config.config import load_agent_config
 
         try:
             self._agent_config = load_agent_config(self.agent_id)
@@ -169,7 +169,8 @@ class LangGraphRunnerAdapter:
             runner = self._get_or_create_runner(request)
 
             # Execute and yield events
-            last = False
+            last_message_content = None
+
             async for event in runner.execute(
                 user_input=user_input,
                 session_id=session_id,
@@ -180,9 +181,8 @@ class LangGraphRunnerAdapter:
                 event_type = event.get("type")
 
                 if event_type == "message":
-                    content = event.get("content", "")
-                    yield (AIMessage(content=content), False)
-                    last = True
+                    # Store the latest message content
+                    last_message_content = event.get("content", "")
 
                 elif event_type == "tool_call":
                     # Could yield tool call events
@@ -204,7 +204,10 @@ class LangGraphRunnerAdapter:
                         event.get("content", {}),
                     )
 
-            if not last:
+            # Yield the final message with is_last=True
+            if last_message_content is not None:
+                yield (AIMessage(content=last_message_content), True)
+            else:
                 yield (AIMessage(content=""), True)
 
         except Exception as e:

@@ -5,6 +5,7 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 
 from .session import LangGraphSession as SafeJSONSession
 from .manager import ChatManager
@@ -126,13 +127,14 @@ async def update_chat(
     return await manager.update_chat(chat)
 
 
-@router.delete("/{chat_id}", status_code=204)
+@router.delete("/{chat_id}")
 async def delete_chat(
     request: Request,
     chat_id: str,
-) -> None:
+) -> Response:
     """Delete a chat session."""
     manager = await get_chat_manager(request)
     deleted = await manager.delete_chats([chat_id])
     if not deleted:
         raise HTTPException(status_code=404, detail="Chat not found")
+    return Response(status_code=204)

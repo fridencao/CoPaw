@@ -3,6 +3,7 @@
 
 Provides RESTful API for managing multiple agent instances.
 """
+from __future__ import annotations
 import json
 import logging
 import shutil
@@ -16,6 +17,7 @@ from ..utils import schedule_agent_reload
 from ...config.config import (
     AgentProfileConfig,
     AgentProfileRef,
+    MCPConfig,
     load_agent_config,
     save_agent_config,
     generate_short_agent_id,
@@ -238,7 +240,6 @@ async def create_agent(
     # Build complete agent config with generated ID
     from ...config.config import (
         ChannelConfig,
-        MCPConfig,
         HeartbeatConfig,
         ToolsConfig,
     )

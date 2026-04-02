@@ -1358,3 +1358,8 @@ def migrate_legacy_config_to_multi_agent() -> bool:
     print(f"  Default agent config: {agent_config_path}")
 
     return True
+
+
+# Rebuild models with forward references
+# This must be called after all classes are defined
+AgentProfileConfig.model_rebuild()
